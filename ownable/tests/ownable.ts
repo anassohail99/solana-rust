@@ -1,49 +1,37 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Ownable } from "../target/types/ownable";
-import {
-  Connection,
-  Keypair,
-  LAMPORTS_PER_SOL,
-  Transaction,
-} from "@solana/web3.js";
 
 describe("Ownable", () => {
+  // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
+
   const program = anchor.workspace.Ownable as Program<Ownable>;
+  const signer2 = anchor.web3.Keypair.generate();
+  const signer3 = anchor.web3.Keypair.generate();
 
-  it("Is initialized correctly by the owner", async () => {
-    const owner = Keypair.generate();
-    const state = Keypair.generate();
-
-    const provider = anchor.getProvider();
-    const connection = provider.connection as Connection;
-
-    // Airdrop SOL and wait for confirmation
-    const signature = await connection.requestAirdrop(
-      owner.publicKey,
-      2 * LAMPORTS_PER_SOL
-    );
-
-    await connection.confirmTransaction(signature);
-
-    const transaction = await program.methods
-      .initialize(owner.publicKey)
+  it("Is signed by a single signer", async () => {
+    const tx = await program.methods
+      .initialize()
       .accounts({
-        state: state.publicKey,
-        signerAccount: owner.publicKey,
+        signer1: program.provider.publicKey,
+        signer2: signer2.publicKey,
+        signer3: signer3.publicKey,
       })
-      .signers([owner, state])
-      .transaction();
+      .signers([signer2, signer3])
+      .rpc();
 
-    transaction.recentBlockhash = (
-      await connection.getLatestBlockhash()
-    ).blockhash;
-    transaction.feePayer = owner.publicKey;
+    console.log("The signer1: ", program.provider.publicKey.toBase58());
+  });
 
-    const signed = await provider.sendAndConfirm(transaction);
+  it("Is called by the owner", async () => {
+    const tx = await program.methods
+      .initialize()
+      .accounts({
+        signer1: program.provider.publicKey,
+      })
+      .rpc();
 
-    const stateAccount = await program.account.state.fetch(state.publicKey);
-    // expect(stateAccount.owner.equals(owner.publicKey)).toBe(true);
+    console.log("Transaction hash:", tx);
   });
 });
